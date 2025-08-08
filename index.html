@@ -1,49 +1,265 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My First Netlify Site</title>
-    <!-- We're adding a little bit of styling directly in the HTML to make it look nicer. -->
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f8ff; /* A light, pleasant blue background */
-            text-align: center;
-            padding-top: 50px;
-            color: #34495e;
-        }
-        h1 {
-            color: #2c3e50; /* A dark, professional blue for the heading */
-        }
-        ul {
-            list-style-type: none; /* This removes the bullet points */
-            padding: 0;
-            margin: 20px auto;
-            max-width: 400px; /* Limits the width of the list */
-            text-align: left; /* Aligns the text to the left */
-        }
-        li {
-            background-color: #ecf0f1; /* A light gray background for each list item */
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 5px; /* Adds rounded corners to the list items */
-        }
-    </style>
-</head>
-<body>
+import React, { useState, useEffect } from 'react';
 
-    <h1>Hello, World! 🌍</h1>
-    <p>This is my first website deployed with Netlify. It's time to start making it my own!</p>
+// This is a mock API key. In a real application, you would need to securely handle this.
+const API_KEY = "";
 
-    <!-- This is a new section with an unordered list (ul) -->
-    <h2>What's Next for This Site?</h2>
-    <ul>
-        <li>Learn more HTML tags.</li>
-        <li>Add more styling with CSS.</li>
-        <li>Build a multi-page website.</li>
-        <li>Share it with friends!</li>
-    </ul>
+// A helper function to create a unique ID for each message.
+const createId = () => Math.random().toString(36).substring(2, 9);
 
-</body>
-</html>
+// Mock data to simulate documents and their extracted content.
+const mockDocuments = [
+  {
+    id: createId(),
+    name: "Invoice_A.pdf",
+    convertedContent: JSON.stringify({
+      invoice_number: "INV-001A",
+      date: "2025-08-01",
+      customer_name: "John Doe Inc.",
+      total_amount: 1250.75,
+      line_items: [
+        { item: "Consulting Service", quantity: 1, price: 1000 },
+        { item: "Software License", quantity: 1, price: 250.75 }
+      ]
+    }, null, 2),
+  },
+  {
+    id: createId(),
+    name: "Receipt_B.pdf",
+    convertedContent: JSON.stringify({
+      invoice_number: "RCPT-876B",
+      date: "2025-07-28",
+      customer_name: "Office Depot",
+      total_amount: 89.99,
+      line_items: [
+        { item: "Pens", quantity: 5, price: 15.99 },
+        { item: "Notebooks", quantity: 3, price: 24.00 },
+        { item: "Stapler", quantity: 1, price: 50.00 }
+      ]
+    }, null, 2),
+  },
+  {
+    id: createId(),
+    name: "Contract_C.pdf",
+    convertedContent: JSON.stringify({
+      contract_id: "CON-987C",
+      parties: ["Company X", "Client Y"],
+      effective_date: "2025-08-05",
+      termination_date: "2026-08-05",
+      terms: "This is a summary of the key terms and clauses extracted by the LLM."
+    }, null, 2),
+  },
+];
+
+const App = () => {
+  // State to hold the list of documents
+  const [documents, setDocuments] = useState([]);
+  // State to track the currently selected document IDs
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
+  // State to hold the chat messages
+  const [messages, setMessages] = useState([]);
+  // State for the user's current chat input
+  const [input, setInput] = useState('');
+  // State for the selected conversion type
+  const [conversionType, setConversionType] = useState('PDF to Excel');
+
+  // This effect runs once when the component mounts to load the mock data.
+  useEffect(() => {
+    // In a real app, this would be a fetch call to an API endpoint
+    // that returns the list of processed documents.
+    setDocuments(mockDocuments);
+    // Initial greeting from the chatbot
+    setMessages([{ id: createId(), sender: 'LLM', text: "Hello! I am your document assistant. Select some documents and tell me how I can help." }]);
+  }, []);
+
+  // Function to handle checkbox changes
+  const handleCheckboxChange = (id) => {
+    setSelectedDocumentIds((prevSelected) =>
+      prevSelected.includes(id)
+        ? prevSelected.filter((docId) => docId !== id)
+        : [...prevSelected, id]
+    );
+  };
+
+  // Function to handle sending a message or conversion command
+  const handleSendMessageOrConvert = (e, isConversion = false) => {
+    e.preventDefault();
+    const promptText = isConversion ? `Convert selected documents to ${conversionType}.` : input;
+    if (promptText.trim() === '') return;
+
+    // Add user message to chat history
+    const newUserMessage = { id: createId(), sender: 'User', text: promptText };
+    setMessages((prevMessages) => [...prevMessages, newUserMessage]);
+    setInput('');
+
+    // Simulate a delayed LLM response
+    setTimeout(() => {
+      let llmResponse = "";
+      
+      if (isConversion) {
+        if (selectedDocumentIds.length === 0) {
+            llmResponse = "Please select at least one document from the sidebar to perform a conversion.";
+        } else {
+            llmResponse = `Initiating conversion of selected documents to ${conversionType}. A download link will be available shortly.`;
+        }
+      } else {
+        if (input.toLowerCase().includes('summarize')) {
+          llmResponse = "Based on the selected documents, the key points are as follows:\n- Invoice A is for consulting and software.\n- Receipt B is for office supplies.\n- Contract C is a one-year agreement between Company X and Client Y.";
+        } else if (input.toLowerCase().includes('total amount')) {
+          const totalAmount = selectedDocuments.reduce((sum, doc) => {
+            try {
+              const content = JSON.parse(doc.convertedContent);
+              return sum + (content.total_amount || 0);
+            } catch (e) {
+              return sum;
+            }
+          }, 0);
+          llmResponse = `The total amount from the selected documents is $${totalAmount.toFixed(2)}.`;
+        } else {
+          llmResponse = "I'm sorry, I don't understand that command. Please try asking a specific question or using the conversion options.";
+        }
+      }
+
+      setMessages((prevMessages) => [...prevMessages, { id: createId(), sender: 'LLM', text: llmResponse }]);
+    }, 1500);
+  };
+
+  // Function to handle the "Combine" action
+  const handleCombine = () => {
+    // Add user message to chat history
+    const newUserMessage = { id: createId(), sender: 'User', text: 'Combine selected documents into a single file.' };
+    setMessages((prevMessages) => [...prevMessages, newUserMessage]);
+    
+    // Simulate a delayed LLM response
+    setTimeout(() => {
+        let llmResponse = "";
+        if (selectedDocumentIds.length <= 1) {
+            llmResponse = "Please select two or more documents to use the combine feature.";
+        } else {
+            llmResponse = `Combining the data from ${selectedDocumentIds.length} documents. A single, unified output will be available shortly.`;
+        }
+        setMessages((prevMessages) => [...prevMessages, { id: createId(), sender: 'LLM', text: llmResponse }]);
+    }, 1500);
+  };
+
+  // Get the selected documents from the main list.
+  const selectedDocuments = documents.filter(doc => selectedDocumentIds.includes(doc.id));
+
+  // Determine if the "Combine" button should be active
+  const canCombine = selectedDocumentIds.length > 1;
+
+  return (
+    <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
+      {/* Sidebar for document list */}
+      <div className="w-1/4 p-4 border-r border-gray-700 overflow-y-auto flex flex-col">
+        <h2 className="text-2xl font-bold mb-4 text-white">Source Documents</h2>
+        <div className="space-y-2 flex-1">
+          {documents.map((doc) => (
+            <div
+              key={doc.id}
+              className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-200 ease-in-out
+                ${selectedDocumentIds.includes(doc.id)
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-800 hover:bg-gray-700'
+              }`}
+              onClick={() => handleCheckboxChange(doc.id)}
+            >
+              <input
+                type="checkbox"
+                className="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded mr-3 pointer-events-none"
+                checked={selectedDocumentIds.includes(doc.id)}
+                onChange={() => {}}
+              />
+              <p className="font-semibold flex-1">{doc.name}</p>
+            </div>
+          ))}
+        </div>
+        {canCombine && (
+            <button
+                type="button"
+                onClick={handleCombine}
+                className="mt-4 bg-orange-600 text-white p-3 rounded-lg font-bold hover:bg-orange-700 transition-colors w-full"
+            >
+                Combine
+            </button>
+        )}
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col p-4 overflow-hidden">
+        <div className="flex-1 flex gap-4 overflow-y-auto">
+          {/* Chatbot Panel (now on the left) */}
+          <div className="w-1/2 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
+            <h3 className="text-xl font-bold mb-2 text-white border-b-2 border-gray-600 pb-2">LLM Chat</h3>
+            <div className="flex-1 p-4 overflow-y-auto bg-gray-900 rounded-md mb-4 space-y-4">
+              {messages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.sender === 'User' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`p-3 rounded-lg max-w-[80%] ${msg.sender === 'User' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-100'}`}>
+                    <p className="font-bold mb-1">{msg.sender}</p>
+                    <p>{msg.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Chat and Conversion Input */}
+            <form onSubmit={handleSendMessageOrConvert} className="flex flex-col gap-2">
+              <input
+                type="text"
+                className="p-3 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ask me about the documents..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+              />
+              <div className="flex gap-2 items-center">
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors flex-1"
+                >
+                  Send
+                </button>
+                <select
+                  value={conversionType}
+                  onChange={(e) => setConversionType(e.target.value)}
+                  className="p-3 rounded-lg bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                >
+                  <option>PDF to Excel</option>
+                  <option>PDF to PDF</option>
+                  <option>Excel to Excel</option>
+                  <option>Excel to PDF</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={(e) => handleSendMessageOrConvert(e, true)}
+                  className="bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition-colors flex-1"
+                >
+                  Convert
+                </button>
+              </div>
+            </form>
+          </div>
+          {/* Document Viewer Panel (now on the right) */}
+          <div className="w-1/2 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
+            <h3 className="text-xl font-bold mb-2 text-white border-b-2 border-gray-600 pb-2">Converted Data (JSON)</h3>
+            <div className="flex-1 p-2 overflow-y-auto bg-gray-900 rounded-md">
+              {selectedDocuments.length > 0 ? (
+                selectedDocuments.map((doc) => (
+                  <div key={doc.id} className="mb-4">
+                    <p className="font-semibold text-blue-300">{doc.name}</p>
+                    <pre className="whitespace-pre-wrap font-mono text-sm text-gray-300">
+                      {doc.convertedContent}
+                    </pre>
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-400 text-center">
+                  Select documents to view their converted content.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
