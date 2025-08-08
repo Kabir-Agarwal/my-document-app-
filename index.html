@@ -1,265 +1,258 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 
-// This is a mock API key. In a real application, you would need to securely handle this.
-const API_KEY = "";
+// NOTE: This component is an advanced UI re-creation of a NotebookLM-like interface.
+// It includes mock functionality for uploading, selecting, and "converting" documents.
+// Styling uses Tailwind classes for easy integration into any React + Tailwind project.
+// Replace placeholder data and handlers with real APIs for a functional app.
 
-// A helper function to create a unique ID for each message.
-const createId = () => Math.random().toString(36).substring(2, 9);
-
-// Mock data to simulate documents and their extracted content.
-const mockDocuments = [
-  {
-    id: createId(),
-    name: "Invoice_A.pdf",
-    convertedContent: JSON.stringify({
-      invoice_number: "INV-001A",
-      date: "2025-08-01",
-      customer_name: "John Doe Inc.",
-      total_amount: 1250.75,
-      line_items: [
-        { item: "Consulting Service", quantity: 1, price: 1000 },
-        { item: "Software License", quantity: 1, price: 250.75 }
-      ]
-    }, null, 2),
-  },
-  {
-    id: createId(),
-    name: "Receipt_B.pdf",
-    convertedContent: JSON.stringify({
-      invoice_number: "RCPT-876B",
-      date: "2025-07-28",
-      customer_name: "Office Depot",
-      total_amount: 89.99,
-      line_items: [
-        { item: "Pens", quantity: 5, price: 15.99 },
-        { item: "Notebooks", quantity: 3, price: 24.00 },
-        { item: "Stapler", quantity: 1, price: 50.00 }
-      ]
-    }, null, 2),
-  },
-  {
-    id: createId(),
-    name: "Contract_C.pdf",
-    convertedContent: JSON.stringify({
-      contract_id: "CON-987C",
-      parties: ["Company X", "Client Y"],
-      effective_date: "2025-08-05",
-      termination_date: "2026-08-05",
-      terms: "This is a summary of the key terms and clauses extracted by the LLM."
-    }, null, 2),
-  },
+const SAMPLE_SOURCES = [
+  { id: "s1", title: "Research Paper - LLMs", type: "PDF", snippet: "Key findings about model scaling..." },
+  { id: "s2", title: "Lecture Notes: RLHF", type: "Doc", snippet: "Reward models and preference learning..." },
+  { id: "s3", title: "Dataset Overview", type: "CSV", snippet: "Columns: id, text, label..." },
 ];
 
-const App = () => {
-  // State to hold the list of documents
-  const [documents, setDocuments] = useState([]);
-  // State to track the currently selected document IDs
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
-  // State to hold the chat messages
-  const [messages, setMessages] = useState([]);
-  // State for the user's current chat input
-  const [input, setInput] = useState('');
-  // State for the selected conversion type
-  const [conversionType, setConversionType] = useState('PDF to Excel');
+export default function NotebookLMReplica() {
+  const [sources, setSources] = useState(SAMPLE_SOURCES);
+  const [activeSourceId, setActiveSourceId] = useState(SAMPLE_SOURCES[0].id);
+  const [query, setQuery] = useState("");
+  const [messages, setMessages] = useState([{
+    id: "m0",
+    sender: "system",
+    text: "Welcome to Notebook — ask questions about your uploaded sources. Cite where possible."
+  }]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedSourceIds, setSelectedSourceIds] = useState([]);
+  const [convertedContent, setConvertedContent] = useState(null);
 
-  // This effect runs once when the component mounts to load the mock data.
+  const chatScrollRef = useRef(null);
+
+  // Scroll chat to the bottom on new messages
   useEffect(() => {
-    // In a real app, this would be a fetch call to an API endpoint
-    // that returns the list of processed documents.
-    setDocuments(mockDocuments);
-    // Initial greeting from the chatbot
-    setMessages([{ id: createId(), sender: 'LLM', text: "Hello! I am your document assistant. Select some documents and tell me how I can help." }]);
-  }, []);
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [messages]);
 
-  // Function to handle checkbox changes
-  const handleCheckboxChange = (id) => {
-    setSelectedDocumentIds((prevSelected) =>
-      prevSelected.includes(id)
-        ? prevSelected.filter((docId) => docId !== id)
-        : [...prevSelected, id]
-    );
-  };
+  const activeSource = sources.find(s => s.id === activeSourceId);
+  const totalSources = sources.length;
+  const selectedSourcesCount = selectedSourceIds.length;
 
-  // Function to handle sending a message or conversion command
-  const handleSendMessageOrConvert = (e, isConversion = false) => {
+  function handleSend(e) {
     e.preventDefault();
-    const promptText = isConversion ? `Convert selected documents to ${conversionType}.` : input;
-    if (promptText.trim() === '') return;
+    const text = query.trim();
+    if (!text) return;
 
-    // Add user message to chat history
-    const newUserMessage = { id: createId(), sender: 'User', text: promptText };
-    setMessages((prevMessages) => [...prevMessages, newUserMessage]);
-    setInput('');
+    const userMsg = { id: Date.now().toString(), sender: "user", text };
+    setMessages(prev => [...prev, userMsg]);
+    setQuery("");
 
-    // Simulate a delayed LLM response
+    // Mock LLM reply (emulate Notebook citations & style)
     setTimeout(() => {
-      let llmResponse = "";
-      
-      if (isConversion) {
-        if (selectedDocumentIds.length === 0) {
-            llmResponse = "Please select at least one document from the sidebar to perform a conversion.";
-        } else {
-            llmResponse = `Initiating conversion of selected documents to ${conversionType}. A download link will be available shortly.`;
-        }
-      } else {
-        if (input.toLowerCase().includes('summarize')) {
-          llmResponse = "Based on the selected documents, the key points are as follows:\n- Invoice A is for consulting and software.\n- Receipt B is for office supplies.\n- Contract C is a one-year agreement between Company X and Client Y.";
-        } else if (input.toLowerCase().includes('total amount')) {
-          const totalAmount = selectedDocuments.reduce((sum, doc) => {
-            try {
-              const content = JSON.parse(doc.convertedContent);
-              return sum + (content.total_amount || 0);
-            } catch (e) {
-              return sum;
-            }
-          }, 0);
-          llmResponse = `The total amount from the selected documents is $${totalAmount.toFixed(2)}.`;
-        } else {
-          llmResponse = "I'm sorry, I don't understand that command. Please try asking a specific question or using the conversion options.";
-        }
-      }
+      const llmMsg = {
+        id: (Date.now()+1).toString(),
+        sender: "notebook",
+        text: `Based on **${activeSource ? activeSource.title : 'your sources'}**: here's a concise answer to "${text}".\n\n[1] ${activeSource ? activeSource.title : 'Source'} — pg. 2-4.`
+      };
+      setMessages(prev => [...prev, llmMsg]);
+    }, 700);
+  }
 
-      setMessages((prevMessages) => [...prevMessages, { id: createId(), sender: 'LLM', text: llmResponse }]);
-    }, 1500);
-  };
+  // Handle source selection with checkbox
+  function handleSourceSelect(sourceId, isSelected) {
+    if (isSelected) {
+      setSelectedSourceIds(prev => [...prev, sourceId]);
+    } else {
+      setSelectedSourceIds(prev => prev.filter(id => id !== sourceId));
+    }
+  }
 
-  // Function to handle the "Combine" action
-  const handleCombine = () => {
-    // Add user message to chat history
-    const newUserMessage = { id: createId(), sender: 'User', text: 'Combine selected documents into a single file.' };
-    setMessages((prevMessages) => [...prevMessages, newUserMessage]);
-    
-    // Simulate a delayed LLM response
-    setTimeout(() => {
-        let llmResponse = "";
-        if (selectedDocumentIds.length <= 1) {
-            llmResponse = "Please select two or more documents to use the combine feature.";
-        } else {
-            llmResponse = `Combining the data from ${selectedDocumentIds.length} documents. A single, unified output will be available shortly.`;
-        }
-        setMessages((prevMessages) => [...prevMessages, { id: createId(), sender: 'LLM', text: llmResponse }]);
-    }, 1500);
-  };
+  // Simulate file conversion
+  function handleConvert() {
+    if (selectedSourcesCount === 0) return;
 
-  // Get the selected documents from the main list.
-  const selectedDocuments = documents.filter(doc => selectedDocumentIds.includes(doc.id));
+    const selectedTitles = selectedSourceIds.map(id => {
+      const source = sources.find(s => s.id === id);
+      return source ? source.title : 'Unknown Document';
+    });
 
-  // Determine if the "Combine" button should be active
-  const canCombine = selectedDocumentIds.length > 1;
+    const mockConvertedText = selectedSourcesCount > 1
+      ? `This is the combined and converted content from the following files: ${selectedTitles.join(', ')}.`
+      : `This is the converted content from: ${selectedTitles[0]}.`;
+
+    setConvertedContent(mockConvertedText);
+  }
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
-      {/* Sidebar for document list */}
-      <div className="w-1/4 p-4 border-r border-gray-700 overflow-y-auto flex flex-col">
-        <h2 className="text-2xl font-bold mb-4 text-white">Source Documents</h2>
-        <div className="space-y-2 flex-1">
-          {documents.map((doc) => (
-            <div
-              key={doc.id}
-              className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-200 ease-in-out
-                ${selectedDocumentIds.includes(doc.id)
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-gray-800 hover:bg-gray-700'
-              }`}
-              onClick={() => handleCheckboxChange(doc.id)}
-            >
-              <input
-                type="checkbox"
-                className="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded mr-3 pointer-events-none"
-                checked={selectedDocumentIds.includes(doc.id)}
-                onChange={() => {}}
-              />
-              <p className="font-semibold flex-1">{doc.name}</p>
-            </div>
-          ))}
+    <div className="h-screen flex flex-col bg-white text-gray-900 font-sans">
+      {/* Top toolbar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center gap-4">
+          <div className="text-lg font-semibold">Notebook</div>
+          <div className="text-sm text-gray-500">Workspace</div>
         </div>
-        {canCombine && (
-            <button
-                type="button"
-                onClick={handleCombine}
-                className="mt-4 bg-orange-600 text-white p-3 rounded-lg font-bold hover:bg-orange-700 transition-colors w-full"
-            >
-                Combine
-            </button>
-        )}
+        <div className="flex items-center gap-2">
+          <button className="text-sm px-3 py-1 rounded-md bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors">New</button>
+          <button className="text-sm px-3 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Save</button>
+        </div>
       </div>
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col p-4 overflow-hidden">
-        <div className="flex-1 flex gap-4 overflow-y-auto">
-          {/* Chatbot Panel (now on the left) */}
-          <div className="w-1/2 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-            <h3 className="text-xl font-bold mb-2 text-white border-b-2 border-gray-600 pb-2">LLM Chat</h3>
-            <div className="flex-1 p-4 overflow-y-auto bg-gray-900 rounded-md mb-4 space-y-4">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.sender === 'User' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`p-3 rounded-lg max-w-[80%] ${msg.sender === 'User' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-100'}`}>
-                    <p className="font-bold mb-1">{msg.sender}</p>
-                    <p>{msg.text}</p>
+      {/* Main 3-column layout */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: Sources panel */}
+        <aside className="w-80 border-r border-gray-100 p-4 overflow-auto bg-gray-50">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-medium text-gray-700">
+              Sources <span className="text-sm text-gray-500">({selectedSourcesCount}/{totalSources} selected)</span>
+            </h3>
+            <button
+              className="text-xs px-2 py-1 border rounded-md text-gray-600 hover:bg-white transition-colors"
+              onClick={() => setShowUploadModal(true)}
+            >
+              Upload
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {sources.map((src, index) => (
+              <div
+                key={src.id}
+                onClick={() => setActiveSourceId(src.id)}
+                className={`flex items-center p-3 rounded-md cursor-pointer border ${src.id === activeSourceId ? 'border-indigo-300 bg-white shadow-md' : 'border-transparent hover:bg-white'}`}
+              >
+                <input
+                  type="checkbox"
+                  className="mr-3 form-checkbox text-indigo-600 rounded"
+                  checked={selectedSourceIds.includes(src.id)}
+                  onChange={(e) => handleSourceSelect(src.id, e.target.checked)}
+                />
+                <div className="text-sm font-semibold mr-2 w-4 text-center">{index + 1}.</div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-start">
+                    <div className="text-sm font-semibold">{src.title}</div>
+                    <div className="text-xs text-gray-400">⋯</div>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600">{src.snippet}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* Center: Chat panel */}
+        <main className="flex-1 flex flex-col">
+          <div className="p-4 border-b border-gray-100">
+            <div className="text-sm text-gray-600">Active source:</div>
+            <div className="text-md font-semibold">{activeSource ? activeSource.title : 'No source selected'}</div>
+          </div>
+
+          <div className="flex-1 p-6 overflow-auto" ref={chatScrollRef}>
+            <div className="space-y-4 max-w-3xl mx-auto">
+              {messages.map(m => (
+                <div key={m.id} className={`${m.sender === 'user' ? 'text-right' : 'text-left'}`}>
+                  <div className={`${m.sender === 'user' ? 'inline-block bg-indigo-600 text-white' : 'inline-block bg-gray-100 text-gray-900'} px-4 py-3 rounded-lg max-w-lg`}>
+                    <div className="text-xs font-semibold mb-1">{m.sender === 'user' ? 'You' : (m.sender === 'notebook' ? 'Notebook' : 'System')}</div>
+                    <div className="text-sm whitespace-pre-wrap">{m.text}</div>
+                    {m.sender === 'notebook' && (
+                      <div className="mt-2 text-xs text-gray-400">Source: {activeSource ? activeSource.title : '—'}</div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
-            {/* Chat and Conversion Input */}
-            <form onSubmit={handleSendMessageOrConvert} className="flex flex-col gap-2">
+          </div>
+
+          <form onSubmit={handleSend} className="p-4 border-t border-gray-100 bg-white">
+            <div className="flex gap-3">
               <input
-                type="text"
-                className="p-3 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ask me about the documents..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Ask Notebook about the selected sources..."
+                className="flex-1 px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-200"
               />
-              <div className="flex gap-2 items-center">
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-full bg-indigo-600 text-white transition-colors hover:bg-indigo-700"
+              >
+                Send
+              </button>
+            </div>
+          </form>
+        </main>
+
+        {/* Right: Converted File / Studio panel */}
+        <aside className="w-96 border-l border-gray-100 p-4 bg-gray-50 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-medium text-gray-700">{convertedContent ? 'Converted File' : 'Studio'}</h3>
+            <div className="text-xs text-gray-500">Create</div>
+          </div>
+
+          <div className="flex-1 overflow-auto rounded-lg bg-white p-3 border border-gray-200">
+            {convertedContent ? (
+              <div className="whitespace-pre-wrap text-sm text-gray-700">
+                {convertedContent}
+              </div>
+            ) : (
+              <div className="text-center text-sm text-gray-500 p-4">
+                Converted documents will appear here.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4">
+            <button
+              className={`w-full px-4 py-3 rounded-md text-white font-semibold transition-colors ${selectedSourcesCount > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-300 cursor-not-allowed'}`}
+              onClick={handleConvert}
+              disabled={selectedSourcesCount === 0}
+            >
+              {selectedSourcesCount > 1 ? 'Combine and Convert' : 'Convert'}
+            </button>
+          </div>
+        </aside>
+
+        {/* Upload Modal Overlay */}
+        {showUploadModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-lg font-semibold">Upload Sources</h4>
                 <button
-                  type="submit"
-                  className="bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors flex-1"
+                  onClick={() => setShowUploadModal(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
                 >
-                  Send
-                </button>
-                <select
-                  value={conversionType}
-                  onChange={(e) => setConversionType(e.target.value)}
-                  className="p-3 rounded-lg bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
-                >
-                  <option>PDF to Excel</option>
-                  <option>PDF to PDF</option>
-                  <option>Excel to Excel</option>
-                  <option>Excel to PDF</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={(e) => handleSendMessageOrConvert(e, true)}
-                  className="bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition-colors flex-1"
-                >
-                  Convert
+                  &times;
                 </button>
               </div>
-            </form>
-          </div>
-          {/* Document Viewer Panel (now on the right) */}
-          <div className="w-1/2 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-            <h3 className="text-xl font-bold mb-2 text-white border-b-2 border-gray-600 pb-2">Converted Data (JSON)</h3>
-            <div className="flex-1 p-2 overflow-y-auto bg-gray-900 rounded-md">
-              {selectedDocuments.length > 0 ? (
-                selectedDocuments.map((doc) => (
-                  <div key={doc.id} className="mb-4">
-                    <p className="font-semibold text-blue-300">{doc.name}</p>
-                    <pre className="whitespace-pre-wrap font-mono text-sm text-gray-300">
-                      {doc.convertedContent}
-                    </pre>
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-400 text-center">
-                  Select documents to view their converted content.
-                </div>
-              )}
+              <div className="space-y-4">
+                <button className="w-full flex items-center justify-center gap-2 p-3 border rounded-md hover:bg-gray-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Upload from computer
+                </button>
+                <button className="w-full flex items-center justify-center gap-2 p-3 border rounded-md hover:bg-gray-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2zM11 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2z" />
+                  </svg>
+                  Upload from drive
+                </button>
+                <button className="w-full flex items-center justify-center gap-2 p-3 border rounded-md hover:bg-gray-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0l3 3a2 2 0 11-2.828 2.828l-3-3a2 2 0 010-2.828 1 1 0 00-1.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+                  </svg>
+                  Upload link
+                </button>
+                <button className="w-full flex items-center justify-center gap-2 p-3 border rounded-md hover:bg-gray-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 2h8v10H6V6zm2 2h4v2H8V8zm0 4h4v2H8v-2z" clipRule="evenodd" />
+                  </svg>
+                  Paste text
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
-};
+}
 
-export default App;
